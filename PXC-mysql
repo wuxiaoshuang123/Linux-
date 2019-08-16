@@ -1,2 +1,62 @@
+PXC--Percona XtraDB Cluster
+ PXC集群主要由两部分组成:percona server with XtraDB和Write Set Replication patches(同步,多主复制插件)
+特点:
+    数据强一致性,无同步延迟
+    没有主从切换操作,无需使用VIP
+    支持InnoDB存储引擎
+    多线程复制
+    部署使用简单
+    支持节点自动加入,无需手动拷贝数据
+
+
 一，安装,环境和部署
-   1.1准备3台虚拟机
+   1.1 准备3台虚拟机,配置IP地址和主机名
+      主机名       IP地址
+      pxcnode71   192.168.4.71
+      pxcnode72   192.168.4.72
+      pxcnode73   192.168.4.73
+   1.2 分别在3台虚拟机上配置主机名与IP地址绑定
+      ]#vim /etc/hosts
+      192.168.4.71     pxcnode71
+      192.168.4.72     pxcnode72
+      192.168.4.73     pxcnode73 
+      :wq
+      ]#hostname  pxcnode71/pxcnode72/pxcnode73
+     在任意一台主机测试是否ping通,    ping -c 2 pxcnode72
+二,安装软件包
+   2.1 分别在3台虚拟机上(71,72,73)依次安装软件包(注意依赖关系)
+    ]# rpm -ivh libev-4.15-1.el6.rf.x86_64.rpm    //安装依赖
+    ]# yum  -y  install  percona-xtrabackup-24-2.4.13-1.el7.x86_64.rpm
+    ]# rpm -ivh qpress-1.1-14.11.x86_64.rpm     //安装依赖
+    ]# tar -xvf  Percona-XtraDB-Cluster-5.7.25-31.35-r463-el7-x86_64-bundle.tar
+    ]# yum -y  install  Percona-XtraDB-Cluster-*.rpm
+三, 修改配置服务 路径:/etc/percona-xtradb-cluster.conf.d/   //三台都要配置
+    ]#ls /etc/percona-xtradb-cluster.conf.d/
+      mysqld.cnf(数据库服务运行参数配置文件)       
+      mysqld_safe.cnf(Percona 配置文件)   #直接使用默认配置
+      wsrep.cnf (pxc集群配置文件)
+    ]# vim /etc/percona-xtradb-cluster.conf.d/mysqld.cnf
+       [mysqld]
+       server-id=71                      //server-id 不允许重复
+       datadir=/var/lib/mysql                  //数据库目录
+       socket=/var/lib/mysql/mysql.sock         //socket文件
+       log-error=/var/log/mysqld.log        //日志文件
+       pid-file=/var/run/mysqld/mysqld.pid    //pid文件
+       log-bin                    //启用binlog日志
+       log_slave_updates            //启用链式复制
+       expire_logs_days=7            //日志文件保留天数
+       :wq
+     ]# vim /etc/percona-xtradb-cluster.conf.d/mysqld_safe.cnf
+       wsrep_cluster_address=gcomm://192.168.4.71,192.168.4.72,192.168.4.73//成员列表
+       wsrep_node_address=192.168.4.71 //本机ip
+       wsrep_cluster_name=pxc-cluster //集群名
+       wsrep_node_name=pxcnode71 //本机主机名
+       wsrep_sst_auth="sstuser:123456" //SST数据同步授权用户及密码
+       :wq
+四,启动服务
+     ]# systemctl  start mysql@bootstrap.service  //启动集群服务
+     使用grep查看数据库密码,修改数据库密码
+     Mysql> garnt reload, lock tables,replication client,process on *.*  to
+     sstuser@"localhost” identified by  “123qqq…A”; //添加授权用户
+     
+     
